@@ -1,6 +1,9 @@
 class AccountAggregate
   include Aggregate
 
+  ###########################################################################
+  # Attributes
+  ###########################################################################
   attribute :id, String
   attribute :customer_id, String
   attribute :balance, Numeric, default: 0
@@ -8,32 +11,9 @@ class AccountAggregate
   attribute :closed_time, Time
   attribute :transaction_position, Integer
 
-  def open?
-    !opened_time.nil?
-  end
-
-  def closed?
-    !closed_time.nil?
-  end
-
-  def deposit(amount)
-    self.balance += amount
-  end
-
-  def withdraw(amount)
-    self.balance -= amount
-  end
-
-  def current?(position)
-    return false if transaction_position.nil?
-
-    transaction_position >= position
-  end
-
-  def sufficient_funds?(amount)
-    balance >= amount
-  end
-
+  ###########################################################################
+  # Command Handlers
+  ###########################################################################
   handle Open do |open|
     account_id = open.account_id
 
@@ -54,15 +34,6 @@ class AccountAggregate
     write.(opened, stream_name, expected_version: version)
   end
 
-  apply Opened do |opened|
-    account.id = opened.account_id
-    account.customer_id = opened.customer_id
-
-    opened_time = Time.parse(opened.time)
-
-    self.opened_time = opened_time
-  end
-
   handle Close do |close|
     account_id = close.account_id
 
@@ -81,12 +52,6 @@ class AccountAggregate
     stream_name = stream_name(account_id)
 
     write.(closed, stream_name, expected_version: version)
-  end
-
-  apply Closed do |closed|
-    closed_time = Time.parse(closed.time)
-
-    self.closed_time = closed_time
   end
 
   handle Deposit do |deposit|
@@ -110,16 +75,6 @@ class AccountAggregate
     stream_name = stream_name(account_id)
 
     write.(deposited, stream_name, expected_version: version)
-  end
-
-  apply Deposited do |deposited|
-    account.id = deposited.account_id
-
-    amount = deposited.amount
-
-    self.deposit(amount)
-
-    self.transaction_position = deposited.transaction_position
   end
 
   handle Withdraw do |withdraw|
@@ -169,6 +124,28 @@ class AccountAggregate
     write.reply(record_withdrawal)
   end
 
+  ###########################################################################
+  # Event Projections
+  ###########################################################################
+  apply Opened do |opened|
+    account.id = opened.account_id
+    account.customer_id = opened.customer_id
+
+    opened_time = Time.parse(opened.time)
+
+    self.opened_time = opened_time
+  end
+
+  apply Deposited do |deposited|
+    account.id = deposited.account_id
+
+    amount = deposited.amount
+
+    self.deposit(amount)
+
+    self.transaction_position = deposited.transaction_position
+  end
+
   apply Withdrawn do |withdrawn|
     account.id = withdrawn.account_id
 
@@ -181,5 +158,40 @@ class AccountAggregate
 
   apply WithdrawalRejected do |withdrawal_rejected|
     self.transaction_position = withdrawal_rejected.transaction_position
+  end
+
+  apply Closed do |closed|
+    closed_time = Time.parse(closed.time)
+
+    self.closed_time = closed_time
+  end
+
+  ###########################################################################
+  # Methods
+  ###########################################################################
+  def open?
+    !opened_time.nil?
+  end
+
+  def closed?
+    !closed_time.nil?
+  end
+
+  def deposit(amount)
+    self.balance += amount
+  end
+
+  def withdraw(amount)
+    self.balance -= amount
+  end
+
+  def current?(position)
+    return false if transaction_position.nil?
+
+    transaction_position >= position
+  end
+
+  def sufficient_funds?(amount)
+    balance >= amount
   end
 end
