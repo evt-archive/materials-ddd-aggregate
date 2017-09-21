@@ -143,7 +143,7 @@ class AccountAggregate
       withdrawal_rejected.time = time
       withdrawal_rejected.transaction_position = position
 
-      write.(withdrawal_rejected, stream_name)
+      write.(withdrawal_rejected, stream_name, expected_version: version)
 
       return
     end
